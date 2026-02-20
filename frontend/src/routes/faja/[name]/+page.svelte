@@ -22,6 +22,9 @@
     setProcessedImageLoading,
     setProcessedImageError,
     updateProcessedImage,
+    ballTrackingBackendStore,
+    millSelectionStore,
+    type MillSelection,
     languageStore,
     translations,
   } from "$lib/stores";
@@ -151,9 +154,12 @@
   // Ball tracking derived metrics (accept extra backend fields without typing)
   let ballResults: any = {};
   $: ballResults = $processedImageStore.data?.results ?? $processedImageStore.data ?? {};
+  $: processedImageMime = ballResults?.img_result_mime ?? "image/jpeg";
   $: ballsCurrentFrame = ballResults?.numero_bolas_img ?? 0;
   $: ballsTotalCount = ballResults?.conteo_bolas ?? 0;
   $: lastDetectionTimestamp = ballResults?.last_detection_timestamp ?? null;
+  $: gateStatus = ballResults?.gate_status ?? "open";
+  $: activeMill = ballResults?.active_mill ?? "M1";
   const backendInchancable = ballResults?.inchancable;
   $: inchancable = INCHANCABLE_FLAG;
   $: inchancableValue =
@@ -175,6 +181,11 @@
   // $: pageTitle = `${selectedFaja?.name} ${t.ballTracking}`;
   $: pageTitle = `${t.ballTracking}`;
   $: pageSubtitle = t.ballDetectionOverview;
+  const millSelectorOptions: Array<{ value: MillSelection; label: string }> = [
+    { value: "M1", label: "M1" },
+    { value: "M2", label: "M2" },
+    { value: "ALL", label: "Both" },
+  ];
 
   async function fetchProcessedImage() {
     // Always set loading state through store when we don't have data
@@ -193,6 +204,21 @@
       }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+      const trackingPayload = data?.results?.ball_tracking;
+
+      if (
+        trackingPayload &&
+        Array.isArray(trackingPayload.pulses) &&
+        Array.isArray(trackingPayload.cumulative)
+      ) {
+        ballTrackingBackendStore.set({
+          bucketMs: trackingPayload.bucket_ms ?? 10000,
+          gateStatus: data?.results?.gate_status ?? "open",
+          activeMill: data?.results?.active_mill ?? "M1",
+          pulses: trackingPayload.pulses,
+          cumulative: trackingPayload.cumulative,
+        });
+      }
 
       if (data.results?.img_result) {
         const newImageHash = data.results.img_result.substring(0, 50);
@@ -201,9 +227,9 @@
         if (imageActuallyChanged) {
           imageChangeCount++;
           lastImageHash = newImageHash;
-          responseTimestamp = data.timestamp || null;
-          updateProcessedImage(data);
         }
+        responseTimestamp = data.timestamp || null;
+        updateProcessedImage(data);
       } else {
         throw new Error("No image data found in response");
       }
@@ -304,13 +330,32 @@
               />
             </svg>
           </button>
-          <div>
+          <div class="flex-1 min-w-0">
             <h1 class="text-4xl font-bold text-white">
               {pageTitle}
             </h1>
             <h2 class="text-xl text-gray-300 mt-1">
               {pageSubtitle}
             </h2>
+            <div class="text-xs text-gray-500 mt-1">
+              Gate: <span class={gateStatus === "open" ? "text-emerald-400" : "text-orange-400"}>{gateStatus}</span>
+              {" · "}
+              Active mill: <span class="text-cyan-400">{activeMill}</span>
+            </div>
+          </div>
+          <div class="ml-auto flex items-center gap-2 self-start">
+            {#each millSelectorOptions as option}
+              <button
+                class={`text-xs px-3 py-1.5 rounded-md border transition-colors ${
+                  $millSelectionStore === option.value
+                    ? "bg-cyan-500/25 border-cyan-400/70 text-cyan-200"
+                    : "bg-slate-700/60 border-white/10 text-gray-200 hover:bg-slate-600/70"
+                }`}
+                on:click={() => millSelectionStore.set(option.value)}
+              >
+                {option.label}
+              </button>
+            {/each}
           </div>
         </header>
 
@@ -533,7 +578,7 @@
                         {:else if $processedImageStore.data && $processedImageStore.data.results?.img_result}
                           <!-- Processed Image -->
                           <img
-                            src={`data:image/jpeg;base64,${$processedImageStore.data.results.img_result}`}
+                            src={`data:${processedImageMime};base64,${$processedImageStore.data.results.img_result}`}
                             alt="Processed Camera Feed"
                             class="w-full h-full object-cover"
                           />
@@ -673,20 +718,7 @@
 
                 <!-- Right Column - Will automatically match left column height -->
                 <div class="col-span-6 flex flex-col gap-4 min-h-0 h-full self-stretch">
-                  <!-- Ball Tracking Tab -->
-                  <div class="bg-slate-800/50 backdrop-blur-sm border border-white/10 rounded-xl p-4 flex-1 flex flex-col min-h-0" style="min-height: 340px;">
-                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2 flex-shrink-0">
-                      <div class="text-sm text-gray-300 font-medium">
-                        {t.ballDetectionTimeline}
-                      </div>
-                      <div class="text-xs text-gray-500">
-                        {t.rollingWindow}
-                      </div>
-                    </div>
-                    <div class="flex-1 min-h-[220px]">
-                      <BallTrackingLineChart />
-                    </div>
-                  </div>
+                  <BallTrackingLineChart />
                 </div>
               </div>
             {:else}
@@ -771,7 +803,7 @@
                       {:else if $processedImageStore.data && $processedImageStore.data.results?.img_result}
                         <!-- Processed Image -->
                         <img
-                          src={`data:image/jpeg;base64,${$processedImageStore.data.results.img_result}`}
+                          src={`data:${processedImageMime};base64,${$processedImageStore.data.results.img_result}`}
                           alt="Processed Camera Feed"
                           class="w-full h-full object-cover"
                         />
@@ -877,22 +909,7 @@
                     </div>
                   </div>
                 </div>
-                <!-- Ball Tracking Tab -->
-                <div
-                  class="bg-slate-800/50 backdrop-blur-sm border border-white/10 rounded-xl p-4 flex-1 flex flex-col min-h-[260px]"
-                >
-                  <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2 flex-shrink-0">
-                    <div class="text-sm text-gray-300 font-medium">
-                      {t.ballDetectionTimeline}
-                    </div>
-                    <div class="text-xs text-gray-500">
-                      {t.rollingWindow}
-                    </div>
-                  </div>
-                  <div class="flex-1 min-h-[200px]">
-                    <BallTrackingLineChart />
-                  </div>
-                </div>
+                <BallTrackingLineChart />
               </div>
             {/if}
           {/if}
@@ -900,56 +917,58 @@
       </div>
     </div>
 
-    <!-- Right Sidebar (unchanged) -->
-    <button
-      class="fixed top-4 right-2 z-30 bg-slate-700/80 backdrop-blur-sm hover:bg-slate-600/80 text-white rounded-full p-2 focus:outline-none border border-white/10 mr-4"
-      on:click={() => (sidebarCollapsed = !sidebarCollapsed)}
-      aria-label="Toggle sidebar"
-      style="pointer-events: auto;"
-    >
-      {#if sidebarCollapsed}
-        <svg
-          class="w-6 h-6"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M15 19l-7-7 7-7"
+    {#if false}
+      <!-- Right sidebar + right-arrow toggle temporarily disabled -->
+      <button
+        class="fixed top-4 right-2 z-30 bg-slate-700/80 backdrop-blur-sm hover:bg-slate-600/80 text-white rounded-full p-2 focus:outline-none border border-white/10 mr-4"
+        on:click={() => (sidebarCollapsed = !sidebarCollapsed)}
+        aria-label="Toggle sidebar"
+        style="pointer-events: auto;"
+      >
+        {#if sidebarCollapsed}
+          <svg
+            class="w-6 h-6"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M15 19l-7-7 7-7"
+            />
+          </svg>
+        {:else}
+          <svg
+            class="w-6 h-6"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M9 5l7 7-7 7"
+            />
+          </svg>
+        {/if}
+      </button>
+      <div
+        class="fixed right-0 top-0 h-full z-20 transition-all duration-300 ease-in-out"
+        style="width: {sidebarCollapsed
+          ? '0px'
+          : '320px'}; pointer-events: {sidebarCollapsed ? 'none' : 'auto'};"
+      >
+        {#if !sidebarCollapsed}
+          <Sidebar
+            fajas={[selectedFaja!]}
+            {activeSidebarTab}
+            setActiveSidebarTab={(i: number) => (activeSidebarTab = i)}
           />
-        </svg>
-      {:else}
-        <svg
-          class="w-6 h-6"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M9 5l7 7-7 7"
-          />
-        </svg>
-      {/if}
-    </button>
-    <div
-      class="fixed right-0 top-0 h-full z-20 transition-all duration-300 ease-in-out"
-      style="width: {sidebarCollapsed
-        ? '0px'
-        : '320px'}; pointer-events: {sidebarCollapsed ? 'none' : 'auto'};"
-    >
-      {#if !sidebarCollapsed}
-        <Sidebar
-          fajas={[selectedFaja]}
-          {activeSidebarTab}
-          setActiveSidebarTab={(i: number) => (activeSidebarTab = i)}
-        />
-      {/if}
-    </div>
+        {/if}
+      </div>
+    {/if}
   </div>
 {/if}

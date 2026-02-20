@@ -13,10 +13,25 @@ export interface RootResponse {
 export interface ProcessImageResponse {
     status: string;
     timestamp?: number;
+    message?: string;
     results: {
         fs_dict: Record<string, number>;
         fs_ajust_dict: Record<string, number>;
         img_result?: string;
+        img_result_mime?: string;
+        numero_bolas_img?: number;
+        conteo_bolas?: number;
+        last_detection_timestamp?: number | null;
+        masa_total?: number;
+        total_mass?: number;
+        mass?: number;
+        gate_status?: 'open' | 'closed';
+        active_mill?: 'M1' | 'M2';
+        ball_tracking?: {
+            bucket_ms: number;
+            pulses: Array<{ time: number; m1: number; m2: number }>;
+            cumulative: Array<{ time: number; m1: number; m2: number }>;
+        };
     };
 }
 

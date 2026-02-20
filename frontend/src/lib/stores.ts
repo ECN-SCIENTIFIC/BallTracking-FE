@@ -172,6 +172,26 @@ function createBallTrackingStore() {
 
 export const ballTrackingStore = createBallTrackingStore();
 
+export type MillSelection = 'M1' | 'M2' | 'ALL';
+export type GateStatus = 'open' | 'closed';
+
+export type MillSeriesPoint = {
+  time: number;
+  m1: number;
+  m2: number;
+};
+
+export type BallTrackingBackendPayload = {
+  bucketMs: number;
+  gateStatus: GateStatus;
+  activeMill: 'M1' | 'M2';
+  pulses: MillSeriesPoint[];
+  cumulative: MillSeriesPoint[];
+};
+
+export const millSelectionStore = writable<MillSelection>('ALL');
+export const ballTrackingBackendStore = writable<BallTrackingBackendPayload | null>(null);
+
 // Translation types
 export type Language = 'en' | 'es';
 

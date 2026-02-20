@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mill Ball-Tracking Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      "Courier New", monospace;
+    background: #0f172a;
+    color: #e2e8f0;
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ── Sidebar ── */
+  aside {
+    width: 260px;
+    min-width: 260px;
+    background: #1e293b;
+    border-right: 1px solid #334155;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .sidebar-section {
+    padding: 14px 16px;
+    border-bottom: 1px solid #334155;
+  }
+  .sidebar-section:last-child { border-bottom: none; }
+  .sidebar-section h2 {
+    font-size: 12px;
+    font-weight: 700;
+    color: #f8fafc;
+    margin-bottom: 10px;
+    letter-spacing: 0.3px;
+  }
+
+  /* summary table */
+  .sum-table { border-collapse: collapse; width: 100%; }
+  .sum-table th, .sum-table td {
+    padding: 5px 10px;
+    text-align: center;
+    font-size: 13px;
+  }
+  .sum-table thead th {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #64748b;
+    padding-bottom: 6px;
+  }
+  .sum-table thead th.ha {
+    color: #60a5fa;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0;
+  }
+  .sum-table thead th.hb {
+    color: #fb923c;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0;
+  }
+  .sum-table tbody td {
+    border-top: 1px solid #334155;
+  }
+  .sum-table td:first-child {
+    text-align: left;
+    color: #94a3b8;
+    font-size: 11px;
+  }
+  .sum-table td.va, .sum-table td.vb {
+    color: #e2e8f0;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* sim controls */
+  .sim-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .sim-btn {
+    flex: 1;
+    padding: 7px 0;
+    border: 1px solid #475569;
+    background: #0f172a;
+    color: #cbd5e1;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+  }
+  .sim-btn:hover { background: #334155; }
+  .sim-btn.active-play {
+    background: #16a34a;
+    border-color: #16a34a;
+    color: #fff;
+  }
+  .speed-row {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 10px;
+  }
+  .speed-btn {
+    flex: 1;
+    padding: 4px 0;
+    border: 1px solid #475569;
+    background: #0f172a;
+    color: #94a3b8;
+    border-radius: 4px;
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .speed-btn:hover { background: #334155; }
+  .speed-btn.active {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: #fff;
+  }
+  .sim-stat {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    padding: 2px 0;
+  }
+  .sim-stat .sl { color: #64748b; }
+  .sim-stat .sv {
+    color: #e2e8f0;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .mill-indicator {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .mill-indicator.ma { background: #1e3a5f; color: #60a5fa; }
+  .mill-indicator.mb { background: #4a2c17; color: #fb923c; }
+
+  /* ── Main ── */
+  main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  /* top bar */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: #1e293b;
+    border-bottom: 1px solid #334155;
+    flex-shrink: 0;
+  }
+  .topbar button {
+    padding: 5px 14px;
+    border: 1px solid #475569;
+    background: #0f172a;
+    color: #cbd5e1;
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .topbar button:hover { background: #334155; }
+  .topbar button.active {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: #fff;
+  }
+  .topbar .sep {
+    width: 1px;
+    height: 18px;
+    background: #334155;
+  }
+  .topbar .hint {
+    font-size: 10px;
+    color: #475569;
+  }
+  .topbar .follow-toggle {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    color: #94a3b8;
+    cursor: pointer;
+    user-select: none;
+  }
+  .topbar .follow-toggle input { cursor: pointer; }
+
+  /* charts */
+  .charts-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 0 16px;
+    min-height: 0;
+    gap: 2px;
+  }
+  .panel-hdr {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 0 2px;
+    flex-shrink: 0;
+  }
+  .panel-lbl {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #64748b;
+  }
+  .panel-sub {
+    font-size: 10px;
+    color: #475569;
+    font-style: italic;
+  }
+  .legend {
+    display: flex;
+    gap: 14px;
+    font-size: 10px;
+    color: #94a3b8;
+  }
+  .legend span {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+  }
+  .dot.a { background: #3b82f6; }
+  .dot.b { background: #f97316; }
+  .chart-wrap {
+    flex: 1;
+    position: relative;
+    min-height: 0;
+  }
+  .chart-wrap canvas {
+    width: 100% !important;
+    height: 100% !important;
+  }
+  .empty-state {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #475569;
+    font-size: 13px;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══ Sidebar ═══ -->
+<aside>
+  <div class="sidebar-section">
+    <h2>Rendimiento Molinos</h2>
+    <table class="sum-table">
+      <thead>
+        <tr>
+          <th>Métrica</th>
+          <th class="ha">M1</th>
+          <th class="hb">M2</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Día</td>
+          <td class="va" id="tADay">0</td>
+          <td class="vb" id="tBDay">0</td>
+        </tr>
+        <tr>
+          <td>Turno</td>
+          <td class="va" id="tAShift">0</td>
+          <td class="vb" id="tBShift">0</td>
+        </tr>
+        <tr>
+          <td>Hora</td>
+          <td class="va" id="tAHour">0</td>
+          <td class="vb" id="tBHour">0</td>
+        </tr>
+        <tr>
+          <td>Operación</td>
+          <td class="va" id="tAOp">0</td>
+          <td class="vb" id="tBOp">0</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sidebar-section">
+    <h2>Simulación</h2>
+    <div class="sim-row">
+      <button class="sim-btn" id="btnPlay" onclick="togglePlay()">
+        ▶ Iniciar
+      </button>
+      <button class="sim-btn" onclick="resetSim()">⟲ Reset</button>
+    </div>
+    <div style="font-size:10px;color:#64748b;margin-bottom:4px">
+      Velocidad
+    </div>
+    <div class="speed-row">
+      <button
+        class="speed-btn"
+        onclick="setSpeed(1,this)"
+      >
+        1×
+      </button>
+      <button
+        class="speed-btn active"
+        onclick="setSpeed(10,this)"
+      >
+        10×
+      </button>
+      <button
+        class="speed-btn"
+        onclick="setSpeed(50,this)"
+      >
+        50×
+      </button>
+      <button
+        class="speed-btn"
+        onclick="setSpeed(200,this)"
+      >
+        200×
+      </button>
+    </div>
+    <div class="sim-stat">
+      <span class="sl">Tiempo sim.</span>
+      <span class="sv" id="simTimeLbl">06:00:00</span>
+    </div>
+    <div class="sim-stat">
+      <span class="sl">Eventos</span>
+      <span class="sv" id="simEventsLbl">0</span>
+    </div>
+    <div class="sim-stat">
+      <span class="sl">Total bolas</span>
+      <span class="sv" id="simBallsLbl">0</span>
+    </div>
+    <div class="sim-stat">
+      <span class="sl">Molino actual</span>
+      <span class="sv">
+        <span class="mill-indicator ma" id="simMillLbl">M1</span>
+      </span>
+    </div>
+    <div class="sim-stat">
+      <span class="sl">Próx. cambio</span>
+      <span class="sv" id="simNextSwitch">—</span>
+    </div>
+  </div>
+</aside>
+
+<!-- ═══ Main ═══ -->
+<main>
+  <div class="topbar">
+    <button id="btnOp" class="active" onclick="setView('op')">
+      Operación
+    </button>
+    <button id="btnHour" onclick="setView('hour')">Hora</button>
+    <button id="btnShift" onclick="setView('shift')">Turno</button>
+    <button id="btnDay" onclick="setView('day')">Día</button>
+    <div class="sep"></div>
+    <button onclick="resetZoom()">Reset Zoom</button>
+    <label class="follow-toggle">
+      <input
+        type="checkbox"
+        id="chkFollow"
+        checked
+        onchange="state.following=this.checked"
+      />
+      Auto-seguir
+    </label>
+    <span class="hint">scroll → zoom · drag → pan</span>
+  </div>
+
+  <div class="charts-area">
+    <div class="panel-hdr">
+      <span class="panel-lbl">
+        Pulsos de Detección
+        <span class="panel-sub" id="bucketLabel">(—)</span>
+      </span>
+      <div class="legend">
+        <span><span class="dot a"></span>M1</span>
+        <span><span class="dot b"></span>M2</span>
+      </div>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="chartPulse"></canvas>
+      <div class="empty-state" id="emptyPulse">
+        ▶ Inicia la simulación para ver datos
+      </div>
+    </div>
+
+    <div class="panel-hdr">
+      <span class="panel-lbl">Totales Acumulados</span>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="chartCumul"></canvas>
+      <div class="empty-state" id="emptyCumul">
+        ▶ Inicia la simulación para ver datos
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+// ═══════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════
+const SIM_START = new Date("2026-02-05T06:00:00").getTime();
+
+const state = {
+  events: [],          // { time, mill:'A'|'B', count }
+  totalA: 0,
+  totalB: 0,
+  simTime: SIM_START,
+  currentMill: "A",
+  running: false,
+  speed: 10,
+  viewMode: "op",
+  following: true,
+
+  // scheduling
+  nextEventTime: SIM_START + randRange(500, 1500),
+  nextSwitchTime: SIM_START + randRange(5, 15) * 60_000,
+  nextPauseTime: SIM_START + randRange(3, 8) * 60_000,
+  pauseUntil: 0,
+};
+
+let lastRealTime = 0;
+let simTimer = null;
+let renderTimer = null;
+
+// ═══════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════
+function randRange(a, b) {
+  return a + Math.random() * (b - a);
+}
+
+function randomBallCount() {
+  const r = Math.random();
+  if (r < 0.1) return 1;
+  if (r < 0.3) return 2;
+  if (r < 0.6) return 3;
+  if (r < 0.85) return 4;
+  return 5;
+}
+
+function fmtTime(ts) {
+  return new Date(ts).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function fmtNum(n) {
+  return n.toLocaleString();
+}
+
+// ═══════════════════════════════════════════════
+//  SIMULATION ENGINE
+// ═══════════════════════════════════════════════
+function simTick() {
+  if (!state.running) return;
+
+  const now = performance.now();
+  const realDelta = Math.min(now - lastRealTime, 100); // cap at 100ms
+  lastRealTime = now;
+
+  const simDelta = realDelta * state.speed;
+  const newSimTime = state.simTime + simDelta;
+
+  // generate events in [simTime, newSimTime]
+  while (state.nextEventTime < newSimTime) {
+    const t = state.nextEventTime;
+
+    // check if we're in a pause
+    if (t < state.pauseUntil) {
+      state.nextEventTime = state.pauseUntil + randRange(300, 800);
+      continue;
+    }
+
+    // check if it's time to switch mills
+    if (t >= state.nextSwitchTime) {
+      state.currentMill = state.currentMill === "A" ? "B" : "A";
+      state.nextSwitchTime = t + randRange(5, 15) * 60_000;
+    }
+
+    // check if it's time for a pause
+    if (t >= state.nextPauseTime) {
+      state.pauseUntil = t + randRange(10, 40) * 1000;
+      state.nextPauseTime = t + randRange(3, 8) * 60_000;
+      state.nextEventTime = state.pauseUntil + randRange(300, 800);
+      continue;
+    }
+
+    // generate detection event
+    const count = randomBallCount();
+    state.events.push({ time: t, mill: state.currentMill, count });
+    if (state.currentMill === "A") state.totalA += count;
+    else state.totalB += count;
+
+    // schedule next event
+    state.nextEventTime = t + randRange(500, 2000);
+  }
+
+  state.simTime = newSimTime;
+}
+
+function togglePlay() {
+  if (state.running) {
+    pauseSim();
+  } else {
+    startSim();
+  }
+}
+
+function startSim() {
+  state.running = true;
+  lastRealTime = performance.now();
+
+  const btn = document.getElementById("btnPlay");
+  btn.textContent = "⏸ Pausar";
+  btn.classList.add("active-play");
+
+  document.getElementById("emptyPulse").style.display = "none";
+  document.getElementById("emptyCumul").style.display = "none";
+
+  if (!simTimer) simTimer = setInterval(simTick, 50);
+  if (!renderTimer) renderTimer = setInterval(render, 500);
+}
+
+function pauseSim() {
+  state.running = false;
+  const btn = document.getElementById("btnPlay");
+  btn.textContent = "▶ Reanudar";
+  btn.classList.remove("active-play");
+}
+
+function resetSim() {
+  state.running = false;
+  state.events = [];
+  state.totalA = 0;
+  state.totalB = 0;
+  state.simTime = SIM_START;
+  state.currentMill = "A";
+  state.nextEventTime = SIM_START + randRange(500, 1500);
+  state.nextSwitchTime = SIM_START + randRange(5, 15) * 60_000;
+  state.nextPauseTime = SIM_START + randRange(3, 8) * 60_000;
+  state.pauseUntil = 0;
+
+  const btn = document.getElementById("btnPlay");
+  btn.textContent = "▶ Iniciar";
+  btn.classList.remove("active-play");
+
+  document.getElementById("emptyPulse").style.display = "flex";
+  document.getElementById("emptyCumul").style.display = "flex";
+
+  render();
+}
+
+function setSpeed(s, el) {
+  state.speed = s;
+  document.querySelectorAll(".speed-btn").forEach(
+    (b) => b.classList.remove("active")
+  );
+  el.classList.add("active");
+}
+
+// ═══════════════════════════════════════════════
+//  BUCKETING
+// ═══════════════════════════════════════════════
+function getBucketSize(viewMode, durationMs) {
+  switch (viewMode) {
+    case "hour":
+      return 10_000;    // 10s
+    case "shift":
+      return 60_000;    // 1min
+    case "day":
+      return 300_000;   // 5min
+    case "op":
+    default:
+      // adaptive
+      if (durationMs < 5 * 60_000) return 5_000;
+      if (durationMs < 30 * 60_000) return 10_000;
+      if (durationMs < 2 * 3600_000) return 30_000;
+      if (durationMs < 8 * 3600_000) return 60_000;
+      return 300_000;
+  }
+}
+
+function bucketLabel(ms) {
+  if (ms < 10_000) return `${ms / 1000}s`;
+  if (ms < 60_000) return `${ms / 1000}s`;
+  if (ms < 3600_000) return `${ms / 60_000}min`;
+  return `${ms / 3600_000}hr`;
+}
+
+function buildBuckets(rangeStart, rangeEnd, bucketMs) {
+  // create empty bucket map
+  const bucketCount = Math.ceil((rangeEnd - rangeStart) / bucketMs);
+  const capped = Math.min(bucketCount, 600); // safety cap
+  const buckets = [];
+
+  for (let i = 0; i < capped; i++) {
+    buckets.push({
+      time: rangeStart + i * bucketMs,
+      a: 0,
+      b: 0,
+    });
+  }
+
+  if (buckets.length === 0) return buckets;
+
+  // fill from events
+  for (let i = 0; i < state.events.length; i++) {
+    const e = state.events[i];
+    if (e.time < rangeStart || e.time >= rangeEnd) continue;
+    const idx = Math.floor((e.time - rangeStart) / bucketMs);
+    if (idx >= 0 && idx < buckets.length) {
+      if (e.mill === "A") buckets[idx].a += e.count;
+      else buckets[idx].b += e.count;
+    }
+  }
+
+  // compute cumulative
+  let ca = 0, cb = 0;
+
+  // add any events before rangeStart to the cumulative baseline
+  for (let i = 0; i < state.events.length; i++) {
+    const e = state.events[i];
+    if (e.time >= rangeStart) break;
+    if (e.mill === "A") ca += e.count;
+    else cb += e.count;
+  }
+
+  for (const b of buckets) {
+    ca += b.a;
+    cb += b.b;
+    b.cumulA = ca;
+    b.cumulB = cb;
+  }
+
+  return buckets;
+}
+
+// ═══════════════════════════════════════════════
+//  SUMMARY TABLE
+// ═══════════════════════════════════════════════
+function sumInRange(startTime, endTime) {
+  let a = 0, b = 0;
+  for (let i = state.events.length - 1; i >= 0; i--) {
+    const e = state.events[i];
+    if (e.time < startTime) break;
+    if (e.time <= endTime) {
+      if (e.mill === "A") a += e.count;
+      else b += e.count;
+    }
+  }
+  return { a, b };
+}
+
+function updateSummary() {
+  const t = state.simTime;
+  const dayStart = new Date(t);
+  dayStart.setHours(0, 0, 0, 0);
+
+  const day = sumInRange(dayStart.getTime(), t);
+  const shift = sumInRange(t - 8 * 3600_000, t);
+  const hour = sumInRange(t - 3600_000, t);
+
+  document.getElementById("tADay").textContent = fmtNum(day.a);
+  document.getElementById("tBDay").textContent = fmtNum(day.b);
+  document.getElementById("tAShift").textContent = fmtNum(shift.a);
+  document.getElementById("tBShift").textContent = fmtNum(shift.b);
+  document.getElementById("tAHour").textContent = fmtNum(hour.a);
+  document.getElementById("tBHour").textContent = fmtNum(hour.b);
+  document.getElementById("tAOp").textContent = fmtNum(state.totalA);
+  document.getElementById("tBOp").textContent = fmtNum(state.totalB);
+
+  // sim stats
+  document.getElementById("simTimeLbl").textContent = fmtTime(t);
+  document.getElementById("simEventsLbl").textContent =
+    fmtNum(state.events.length);
+  document.getElementById("simBallsLbl").textContent =
+    fmtNum(state.totalA + state.totalB);
+
+  const millLbl = document.getElementById("simMillLbl");
+  if (state.currentMill === "A") {
+    millLbl.textContent = "M1";
+    millLbl.className = "mill-indicator ma";
+  } else {
+    millLbl.textContent = "M2";
+    millLbl.className = "mill-indicator mb";
+  }
+
+  // next switch countdown
+  const secsToSwitch = Math.max(
+    0,
+    Math.round((state.nextSwitchTime - t) / 1000)
+  );
+  const m = Math.floor(secsToSwitch / 60);
+  const s = secsToSwitch % 60;
+  document.getElementById("simNextSwitch").textContent =
+    `${m}m ${s.toString().padStart(2, "0")}s`;
+}
+
+// ═══════════════════════════════════════════════
+//  CHARTS
+// ═══════════════════════════════════════════════
+const COL = {
+  a: "#3b82f6",
+  b: "#f97316",
+  grid: "#1e293b",
+  tick: "#64748b",
+};
+
+const allCharts = [];
+let syncing = false;
+
+function onZoomPan({ chart }) {
+  if (syncing) return;
+  syncing = true;
+  state.following = false;
+  document.getElementById("chkFollow").checked = false;
+  const { min, max } = chart.scales.x;
+  for (const c of allCharts) {
+    if (c === chart) continue;
+    c.options.scales.x.min = min;
+    c.options.scales.x.max = max;
+    c.update("none");
+  }
+  syncing = false;
+}
+
+function zoomOpts() {
+  return {
+    zoom: {
+      wheel: { enabled: true },
+      pinch: { enabled: true },
+      mode: "x",
+      onZoomComplete: onZoomPan,
+    },
+    pan: {
+      enabled: true,
+      mode: "x",
+      onPanComplete: onZoomPan,
+    },
+  };
+}
+
+const ttStyle = {
+  backgroundColor: "#1e293b",
+  borderColor: "#475569",
+  borderWidth: 1,
+  titleColor: "#f8fafc",
+  bodyColor: "#cbd5e1",
+  padding: 10,
+  cornerRadius: 8,
+  displayColors: true,
+};
+
+function fmtTooltipTitle(items) {
+  return fmtTime(items[0].parsed.x);
+}
+
+// Pulse chart (stacked bar)
+const chartPulse = new Chart(document.getElementById("chartPulse"), {
+  type: "bar",
+  data: {
+    labels: [],
+    datasets: [
+      {
+        label: "M1",
+        data: [],
+        backgroundColor: COL.a + "cc",
+        hoverBackgroundColor: COL.a,
+        borderWidth: 0,
+        barPercentage: 1.0,
+        categoryPercentage: 1.0,
+      },
+      {
+        label: "M2",
+        data: [],
+        backgroundColor: COL.b + "cc",
+        hoverBackgroundColor: COL.b,
+        borderWidth: 0,
+        barPercentage: 1.0,
+        categoryPercentage: 1.0,
+      },
+    ],
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,
+    interaction: { mode: "index", intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: { ...ttStyle, callbacks: { title: fmtTooltipTitle } },
+      zoom: zoomOpts(),
+    },
+    scales: {
+      x: {
+        type: "time",
+        stacked: true,
+        time: {
+          tooltipFormat: "HH:mm:ss",
+          displayFormats: {
+            second: "HH:mm:ss",
+            minute: "HH:mm",
+            hour: "HH:mm",
+          },
+        },
+        ticks: { display: false },
+        grid: { color: COL.grid },
+      },
+      y: {
+        stacked: true,
+        min: 0,
+        title: {
+          display: true,
+          text: "bolas",
+          color: COL.tick,
+          font: { size: 10 },
+        },
+        ticks: { color: COL.tick, font: { size: 10 } },
+        grid: { color: COL.grid },
+      },
+    },
+  },
+});
+allCharts.push(chartPulse);
+
+// Cumulative chart (lines)
+const chartCumul = new Chart(document.getElementById("chartCumul"), {
+  type: "line",
+  data: {
+    labels: [],
+    datasets: [
+      {
+        label: "M1",
+        data: [],
+        borderColor: COL.a,
+        backgroundColor: COL.a + "18",
+        borderWidth: 2,
+        pointRadius: 0,
+        pointHitRadius: 6,
+        fill: true,
+        tension: 0.05,
+      },
+      {
+        label: "M2",
+        data: [],
+        borderColor: COL.b,
+        backgroundColor: COL.b + "18",
+        borderWidth: 2,
+        pointRadius: 0,
+        pointHitRadius: 6,
+        fill: true,
+        tension: 0.05,
+      },
+    ],
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,
+    interaction: { mode: "index", intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        ...ttStyle,
+        callbacks: {
+          title: fmtTooltipTitle,
+          label: (ctx) =>
+            `${ctx.dataset.label}: ${fmtNum(ctx.parsed.y)}`,
+        },
+      },
+      zoom: zoomOpts(),
+    },
+    scales: {
+      x: {
+        type: "time",
+        time: {
+          tooltipFormat: "HH:mm:ss",
+          displayFormats: {
+            second: "HH:mm:ss",
+            minute: "HH:mm",
+            hour: "HH:mm",
+          },
+        },
+        ticks: {
+          color: COL.tick,
+          maxRotation: 0,
+          font: { size: 10 },
+        },
+        grid: { color: COL.grid },
+      },
+      y: {
+        min: 0,
+        title: {
+          display: true,
+          text: "total bolas",
+          color: COL.tick,
+          font: { size: 10 },
+        },
+        ticks: {
+          color: COL.tick,
+          font: { size: 10 },
+          callback: (v) =>
+            v >= 1000 ? (v / 1000).toFixed(1) + "k" : v,
+        },
+        grid: { color: COL.grid },
+      },
+    },
+  },
+});
+allCharts.push(chartCumul);
+
+// ═══════════════════════════════════════════════
+//  RENDER
+// ═══════════════════════════════════════════════
+function getVisibleRange() {
+  const t = state.simTime;
+  switch (state.viewMode) {
+    case "hour":
+      return [t - 3600_000, t];
+    case "shift":
+      return [t - 8 * 3600_000, t];
+    case "day":
+      return [t - 24 * 3600_000, t];
+    case "op":
+    default:
+      return [SIM_START, t];
+  }
+}
+
+function render() {
+  updateSummary();
+
+  if (state.events.length === 0) {
+    // clear charts
+    chartPulse.data.labels = [];
+    chartPulse.data.datasets[0].data = [];
+    chartPulse.data.datasets[1].data = [];
+    chartPulse.update("none");
+    chartCumul.data.labels = [];
+    chartCumul.data.datasets[0].data = [];
+    chartCumul.data.datasets[1].data = [];
+    chartCumul.update("none");
+    return;
+  }
+
+  const [rangeStart, rangeEnd] = getVisibleRange();
+  const duration = rangeEnd - rangeStart;
+  const bucketMs = getBucketSize(state.viewMode, duration);
+
+  // update bucket label
+  document.getElementById("bucketLabel").textContent =
+    `(agrupado cada ${bucketLabel(bucketMs)})`;
+
+  // update y-axis title
+  chartPulse.options.scales.y.title.text =
+    `bolas / ${bucketLabel(bucketMs)}`;
+
+  const buckets = buildBuckets(rangeStart, rangeEnd, bucketMs);
+
+  const labels = buckets.map((b) => b.time);
+  const aData = buckets.map((b) => b.a);
+  const bData = buckets.map((b) => b.b);
+  const caData = buckets.map((b) => b.cumulA);
+  const cbData = buckets.map((b) => b.cumulB);
+
+  // pulse chart
+  chartPulse.data.labels = labels;
+  chartPulse.data.datasets[0].data = aData;
+  chartPulse.data.datasets[1].data = bData;
+
+  if (state.following) {
+    chartPulse.options.scales.x.min = rangeStart;
+    chartPulse.options.scales.x.max = rangeEnd;
+  }
+  chartPulse.update("none");
+
+  // cumulative chart
+  chartCumul.data.labels = labels;
+  chartCumul.data.datasets[0].data = caData;
+  chartCumul.data.datasets[1].data = cbData;
+
+  if (state.following) {
+    chartCumul.options.scales.x.min = rangeStart;
+    chartCumul.options.scales.x.max = rangeEnd;
+  }
+  chartCumul.update("none");
+}
+
+// ═══════════════════════════════════════════════
+//  VIEW / ZOOM CONTROLS
+// ═══════════════════════════════════════════════
+function setView(mode) {
+  state.viewMode = mode;
+  document.querySelectorAll(".topbar button[id]").forEach(
+    (b) => b.classList.remove("active")
+  );
+  const id =
+    "btn" + mode.charAt(0).toUpperCase() + mode.slice(1);
+  document.getElementById(id)?.classList.add("active");
+
+  // re-enable following
+  state.following = true;
+  document.getElementById("chkFollow").checked = true;
+
+  render();
+}
+
+function resetZoom() {
+  state.following = true;
+  document.getElementById("chkFollow").checked = true;
+  for (const c of allCharts) {
+    c.resetZoom();
+  }
+  render();
+}
+
+window.addEventListener("resize", () => {
+  for (const c of allCharts) c.resize();
+});
+
+// initial render
+render();
+</script>
+</body>
+</html>

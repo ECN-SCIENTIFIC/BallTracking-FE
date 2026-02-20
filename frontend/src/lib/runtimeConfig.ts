@@ -59,7 +59,7 @@ export async function loadConfig(): Promise<RuntimeConfig> {
       // Fallback to default values
       config = {
         apiBaseUrl: 'http://127.0.0.1:8000',
-        cameraUrl: 'http://127.0.0.1:8001'
+        cameraUrl: 'http://127.0.0.1:8000'
       };
       return config;
     } finally {
@@ -88,7 +88,7 @@ export function getConfig(): RuntimeConfig {
   // Return defaults if not loaded yet
   return {
     apiBaseUrl: 'http://127.0.0.1:8000',
-    cameraUrl: 'http://127.0.0.1:8001'
+    cameraUrl: 'http://127.0.0.1:8000'
   };
 }
 
