@@ -12,12 +12,24 @@
 
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { processedImageStore, languageStore, translations, authStore, type Language } from './stores';
+  import type { ChartSeriesKind } from '$lib/ballTracking/caseConfig';
+  import {
+    processedImageStore,
+    languageStore,
+    translations,
+    authStore,
+    ballTrackingMillsStore,
+    ballTrackingShowCameraStore,
+    ballTrackingChartPrefsStore,
+    type Language,
+  } from './stores';
   
   // Use Faja type directly, no import needed
   export let fajas: Faja[] = [];
   export let activeSidebarTab: number = 0;
   export let setActiveSidebarTab: (i: number) => void = () => {};
+  /** Ball tracking dashboard: camera + chart layout toggles in the Config tab. */
+  export let showBallTrackingLayoutControls = false;
   // If setActiveSidebarTab is not provided, manage internally
   let internalTab = 0;
   $: tab = setActiveSidebarTab === (() => {}) ? internalTab : activeSidebarTab;
@@ -148,6 +160,106 @@
     {:else if tab === 2}
       <!-- Settings Tab -->
       <div class="space-y-6">
+        {#if showBallTrackingLayoutControls}
+          <div class="bg-slate-700/30 backdrop-blur-sm border border-white/10 rounded-lg p-4 space-y-4">
+            <h3 class="font-semibold text-base text-cyan-400">{t.ballTrackingSidebarLayout}</h3>
+            <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+              <input
+                type="checkbox"
+                class="rounded border-white/20 bg-slate-800"
+                checked={$ballTrackingShowCameraStore}
+                on:change={(e) =>
+                  ballTrackingShowCameraStore.set(e.currentTarget.checked)}
+              />
+              {t.showCameraFeed}
+            </label>
+            <div class="space-y-2">
+              <div class="text-xs text-gray-400">{t.chartDisplaySeparate} / {t.chartDisplayCombined}</div>
+              <div class="flex flex-col gap-2">
+                <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="chart-mode"
+                    class="border-white/20 bg-slate-800"
+                    checked={$ballTrackingChartPrefsStore.mode === "separate"}
+                    on:change={() =>
+                      ballTrackingChartPrefsStore.update((p) => ({
+                        ...p,
+                        mode: "separate",
+                      }))}
+                  />
+                  {t.chartDisplaySeparate}
+                </label>
+                <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="chart-mode"
+                    class="border-white/20 bg-slate-800"
+                    checked={$ballTrackingChartPrefsStore.mode === "combined"}
+                    on:change={() =>
+                      ballTrackingChartPrefsStore.update((p) => ({
+                        ...p,
+                        mode: "combined",
+                      }))}
+                  />
+                  {t.chartDisplayCombined}
+                </label>
+              </div>
+            </div>
+            {#if $ballTrackingMillsStore.length > 1}
+              <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  class="rounded border-white/20 bg-slate-800"
+                  checked={$ballTrackingChartPrefsStore.compareMills}
+                  on:change={(e) =>
+                    ballTrackingChartPrefsStore.update((p) => ({
+                      ...p,
+                      compareMills: e.currentTarget.checked,
+                    }))}
+                />
+                {t.compareMillsSideBySide}
+              </label>
+            {/if}
+            <div class="space-y-2">
+              <div class="text-xs text-gray-400">{t.chartSeriesSection}</div>
+              <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  class="rounded border-white/20 bg-slate-800"
+                  checked={$ballTrackingChartPrefsStore.series.includes("detections")}
+                  on:change={(e) => {
+                    const on = e.currentTarget.checked;
+                    ballTrackingChartPrefsStore.update((p) => {
+                      let series: ChartSeriesKind[] = p.series.filter((x) => x !== "detections");
+                      if (on) series = [...series, "detections"];
+                      if (!series.length) series = ["accumulated"];
+                      return { ...p, series };
+                    });
+                  }}
+                />
+                {t.chartSeriesDetections}
+              </label>
+              <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  class="rounded border-white/20 bg-slate-800"
+                  checked={$ballTrackingChartPrefsStore.series.includes("accumulated")}
+                  on:change={(e) => {
+                    const on = e.currentTarget.checked;
+                    ballTrackingChartPrefsStore.update((p) => {
+                      let series: ChartSeriesKind[] = p.series.filter((x) => x !== "accumulated");
+                      if (on) series = [...series, "accumulated"];
+                      if (!series.length) series = ["detections"];
+                      return { ...p, series };
+                    });
+                  }}
+                />
+                {t.chartSeriesAccumulated}
+              </label>
+            </div>
+          </div>
+        {/if}
         <!-- Language Selector -->
         <div class="bg-slate-700/30 backdrop-blur-sm border border-white/10 rounded-lg p-4">
           <label for="language" class="text-sm text-gray-300 mb-2 block">{t.language}</label>

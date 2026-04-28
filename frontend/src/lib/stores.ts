@@ -1,5 +1,105 @@
 import { writable } from 'svelte/store';
 import type { ProcessImageResponse } from './types';
+import type { BallTrackingChartsConfig, MillDefinition } from './ballTracking/caseConfig';
+import type { ResolvedRuntimeConfig } from './runtimeConfig';
+
+const DEFAULT_SINGLE_MILL: MillDefinition[] = [{ id: 'M1', label: 'M1' }];
+
+/** Mills for this deployment, set from `config.json` on each `loadConfig()`. */
+export const ballTrackingMillsStore = writable<MillDefinition[]>(DEFAULT_SINGLE_MILL);
+
+/** Feature flag from `config.json` (`inchancable: false` to hide shift / inchancable tiles). */
+export const ballTrackingInchancableStore = writable(true);
+
+function defaultChartPrefs(): BallTrackingChartsConfig {
+  return {
+    mode: 'separate',
+    series: ['detections', 'accumulated'],
+    compareMills: true,
+  };
+}
+
+function createBallTrackingChartPrefsStore() {
+  const STORAGE_KEY = 'ball-tracking-chart-prefs-v1';
+  let initial = defaultChartPrefs();
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const p = JSON.parse(raw) as Record<string, unknown>;
+        if (p && typeof p === 'object') {
+          if (p.mode === 'combined' || p.mode === 'separate') {
+            initial = { ...initial, mode: p.mode };
+          }
+          if (typeof p.compareMills === 'boolean') {
+            initial = { ...initial, compareMills: p.compareMills };
+          }
+          if (Array.isArray(p.series) && p.series.length) {
+            const s = p.series.filter(
+              (x): x is 'detections' | 'accumulated' =>
+                x === 'detections' || x === 'accumulated',
+            );
+            if (s.length) initial = { ...initial, series: s };
+          }
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const { subscribe, set, update } = writable<BallTrackingChartsConfig>(initial);
+
+  if (typeof window !== 'undefined') {
+    subscribe((v) => {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(v));
+      } catch {
+        /* ignore */
+      }
+    });
+  }
+
+  return { subscribe, set, update };
+}
+
+/** User-controlled chart layout (persisted): combined vs separate, compare vs aggregate, series. */
+export const ballTrackingChartPrefsStore = createBallTrackingChartPrefsStore();
+
+function createBooleanLocalStorageStore(key: string, defaultVal: boolean) {
+  let initial = defaultVal;
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw === 'false') initial = false;
+      if (raw === 'true') initial = true;
+    } catch {
+      /* ignore */
+    }
+  }
+  const { subscribe, set, update } = writable(initial);
+  if (typeof window !== 'undefined') {
+    subscribe((v) => {
+      try {
+        localStorage.setItem(key, String(v));
+      } catch {
+        /* ignore */
+      }
+    });
+  }
+  return { subscribe, set, update };
+}
+
+/** User toggle: show the camera feed panel (persisted). */
+export const ballTrackingShowCameraStore = createBooleanLocalStorageStore(
+  'ball-tracking-show-camera-v1',
+  true,
+);
+
+export function syncBallTrackingFromResolvedConfig(cfg: ResolvedRuntimeConfig) {
+  ballTrackingMillsStore.set(cfg.millsResolved);
+  ballTrackingInchancableStore.set(cfg.inchancableEnabled);
+}
 
 // Store for processed image data
 export const processedImageStore = writable<{
@@ -172,7 +272,8 @@ function createBallTrackingStore() {
 
 export const ballTrackingStore = createBallTrackingStore();
 
-export type MillSelection = 'M1' | 'M2' | 'ALL';
+/** Selected mill id, or `all` to show every configured mill (compare or aggregate per chart config). */
+export type MillSelection = 'all' | string;
 export type GateStatus = 'open' | 'closed';
 
 export type MillSeriesPoint = {
@@ -184,12 +285,12 @@ export type MillSeriesPoint = {
 export type BallTrackingBackendPayload = {
   bucketMs: number;
   gateStatus: GateStatus;
-  activeMill: 'M1' | 'M2';
+  activeMill: string;
   pulses: MillSeriesPoint[];
   cumulative: MillSeriesPoint[];
 };
 
-export const millSelectionStore = writable<MillSelection>('ALL');
+export const millSelectionStore = writable<MillSelection>('all');
 export const ballTrackingBackendStore = writable<BallTrackingBackendPayload | null>(null);
 
 // Translation types
@@ -278,6 +379,23 @@ export interface Translations {
   summary: string;
   ballTracking: string;
   ballDetectionIndicators: string;
+  editIndicators: string;
+  dragIndicatorsHint: string;
+  noIndicatorsVisible: string;
+  ballAccumByShift: string;
+  runCleaner: string;
+  runCleanerHint: string;
+  generateReport: string;
+  generateReportHint: string;
+  ballAccumByDay: string;
+  ballFlow: string;
+  ballFlowHint: string;
+  show: string;
+  hide: string;
+  done: string;
+  reset: string;
+  moveIndicatorLeft: string;
+  moveIndicatorRight: string;
   ballDetectionOverview: string;
   waitingForUpdates: string;
   ballsInFrame: string;
@@ -294,6 +412,16 @@ export interface Translations {
   inchancable: string;
   active: string;
   inactive: string;
+  noSignal: string;
+  allMills: string;
+  ballTrackingSidebarLayout: string;
+  showCameraFeed: string;
+  chartDisplayCombined: string;
+  chartDisplaySeparate: string;
+  compareMillsSideBySide: string;
+  chartSeriesDetections: string;
+  chartSeriesAccumulated: string;
+  chartSeriesSection: string;
   backToOverview: string;
   fajaNotFound: string;
   
@@ -394,6 +522,23 @@ export const translations: Record<Language, Translations> = {
     summary: 'Data Entry',
     ballTracking: 'Ball Tracking',
     ballDetectionIndicators: 'Ball Detection Indicators',
+    editIndicators: 'Edit indicators',
+    dragIndicatorsHint: 'Drag cards to reorder. Use Show/Hide to choose which indicators appear on the dashboard.',
+    noIndicatorsVisible: 'All indicators are hidden. Open edit mode to show one again.',
+    ballAccumByShift: 'Ball accum by shift',
+    runCleaner: 'Run cleaner',
+    runCleanerHint: 'Start a cleaning cycle',
+    generateReport: 'Generate report',
+    generateReportHint: 'Export the latest summary',
+    ballAccumByDay: 'Ball accum by day',
+    ballFlow: 'Ball flow',
+    ballFlowHint: 'Rolling rate',
+    show: 'Show',
+    hide: 'Hide',
+    done: 'Done',
+    reset: 'Reset',
+    moveIndicatorLeft: 'Move indicator left',
+    moveIndicatorRight: 'Move indicator right',
     ballDetectionOverview: 'Ball detection overview',
     waitingForUpdates: 'Waiting for updates',
     ballsInFrame: 'Balls in Frame',
@@ -410,6 +555,16 @@ export const translations: Record<Language, Translations> = {
     inchancable: 'Inchancable',
     active: 'Active',
     inactive: 'Inactive',
+    noSignal: 'No signal',
+    allMills: 'All',
+    ballTrackingSidebarLayout: 'Ball tracking layout',
+    showCameraFeed: 'Show camera feed',
+    chartDisplayCombined: 'Single chart (dual axis)',
+    chartDisplaySeparate: 'Separate chart cards',
+    compareMillsSideBySide: 'Compare mills side-by-side when “All” is selected',
+    chartSeriesDetections: 'Detections series',
+    chartSeriesAccumulated: 'Accumulated series',
+    chartSeriesSection: 'Chart series',
     backToOverview: 'Back to Overview',
     fajaNotFound: 'Faja not found',
     guard: 'Guard',
@@ -503,6 +658,23 @@ export const translations: Record<Language, Translations> = {
     summary: 'Ingesta',
     ballTracking: 'Conteo de bolas',
     ballDetectionIndicators: 'Indicadores de detección de bolas',
+    editIndicators: 'Editar indicadores',
+    dragIndicatorsHint: 'Arrastre las tarjetas para reordenarlas. Use Mostrar/Ocultar para elegir qué indicadores aparecen en el panel.',
+    noIndicatorsVisible: 'Todos los indicadores están ocultos. Abra el modo de edición para mostrar uno nuevamente.',
+    ballAccumByShift: 'Bolas acumuladas por turno',
+    runCleaner: 'Ejecutar limpieza',
+    runCleanerHint: 'Iniciar ciclo de limpieza',
+    generateReport: 'Generar reporte',
+    generateReportHint: 'Exportar resumen reciente',
+    ballAccumByDay: 'Bolas acumuladas por día',
+    ballFlow: 'Flujo de bolas',
+    ballFlowHint: 'Tasa móvil',
+    show: 'Mostrar',
+    hide: 'Ocultar',
+    done: 'Listo',
+    reset: 'Restablecer',
+    moveIndicatorLeft: 'Mover indicador a la izquierda',
+    moveIndicatorRight: 'Mover indicador a la derecha',
     ballDetectionOverview: 'Resumen de detección de bolas',
     waitingForUpdates: 'Esperando actualizaciones',
     ballsInFrame: 'Bolas en frame',
@@ -519,6 +691,16 @@ export const translations: Record<Language, Translations> = {
     inchancable: 'Inchancable',
     active: 'Activo',
     inactive: 'Inactivo',
+    noSignal: 'Sin senal',
+    allMills: 'Todos',
+    ballTrackingSidebarLayout: 'Diseño de conteo de bolas',
+    showCameraFeed: 'Mostrar cámara',
+    chartDisplayCombined: 'Un gráfico (dos ejes)',
+    chartDisplaySeparate: 'Gráficos separados',
+    compareMillsSideBySide: 'Comparar molinos cuando “Todos” está seleccionado',
+    chartSeriesDetections: 'Serie de detecciones',
+    chartSeriesAccumulated: 'Serie acumulada',
+    chartSeriesSection: 'Series del gráfico',
     backToOverview: 'Volver a Vista General',
     fajaNotFound: 'Faja no encontrada',
     guard: 'Guardia',

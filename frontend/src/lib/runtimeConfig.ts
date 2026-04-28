@@ -3,29 +3,62 @@
  * Loads config.json at runtime to allow configuration without rebuilding
  */
 
+import type { MillDefinition } from "./ballTracking/caseConfig";
+
+/** Mill entry in config.json: id string or `{ id, label? }` */
+export type RawMillConfig = string | { id: string; label?: string };
+
 export interface RuntimeConfig {
   apiBaseUrl: string;
   cameraUrl: string;
+  /** When omitted, deployment is treated as a single mill `M1`. */
+  mills?: RawMillConfig[];
+  /** When `false`, inchancable / shift indicator tiles are off. Default true. */
+  inchancable?: boolean;
+}
+
+export type ResolvedRuntimeConfig = RuntimeConfig & {
+  millsResolved: MillDefinition[];
+  inchancableEnabled: boolean;
+};
+
+export function normalizeMills(raw?: RawMillConfig[]): MillDefinition[] {
+  if (!raw?.length) {
+    return [{ id: "M1", label: "M1" }];
+  }
+  return raw.map((m) =>
+    typeof m === "string"
+      ? { id: m, label: m }
+      : { id: m.id, label: m.label ?? m.id },
+  );
 }
 
 let config: RuntimeConfig | null = null;
-let configPromise: Promise<RuntimeConfig> | null = null;
+let configPromise: Promise<ResolvedRuntimeConfig> | null = null;
 
 /**
  * Loads the runtime configuration from config.json
  * Caches the result after first load
  */
-export async function loadConfig(): Promise<RuntimeConfig> {
+function resolveConfig(base: RuntimeConfig): ResolvedRuntimeConfig {
+  return {
+    ...base,
+    millsResolved: normalizeMills(base.mills),
+    inchancableEnabled: base.inchancable !== false,
+  };
+}
+
+export async function loadConfig(): Promise<ResolvedRuntimeConfig> {
   // Check for runtime override first
   const override = getRuntimeConfigOverride();
   if (override) {
     config = override;
-    return config;
+    return resolveConfig(override);
   }
 
   // Return cached config if already loaded
   if (config) {
-    return config;
+    return resolveConfig(config);
   }
 
   // Return existing promise if already loading
@@ -50,18 +83,20 @@ export async function loadConfig(): Promise<RuntimeConfig> {
       // Remove trailing slashes
       config = {
         apiBaseUrl: loadedConfig.apiBaseUrl.replace(/\/+$/, ''),
-        cameraUrl: loadedConfig.cameraUrl.replace(/\/+$/, '')
+        cameraUrl: loadedConfig.cameraUrl.replace(/\/+$/, ''),
+        mills: loadedConfig.mills,
+        inchancable: loadedConfig.inchancable,
       };
 
-      return config;
+      return resolveConfig(config);
     } catch (error) {
       console.error('Error loading runtime config:', error);
       // Fallback to default values
       config = {
         apiBaseUrl: 'http://127.0.0.1:8000',
-        cameraUrl: 'http://127.0.0.1:8000'
+        cameraUrl: 'http://127.0.0.1:8000',
       };
-      return config;
+      return resolveConfig(config);
     } finally {
       configPromise = null;
     }
@@ -88,8 +123,13 @@ export function getConfig(): RuntimeConfig {
   // Return defaults if not loaded yet
   return {
     apiBaseUrl: 'http://127.0.0.1:8000',
-    cameraUrl: 'http://127.0.0.1:8000'
+    cameraUrl: 'http://127.0.0.1:8000',
   };
+}
+
+/** Same as `getConfig()` plus normalized mills (defaults to single M1 until `loadConfig()` runs). */
+export function getResolvedConfig(): ResolvedRuntimeConfig {
+  return resolveConfig(getConfig());
 }
 
 /**
@@ -113,7 +153,9 @@ export async function updateConfig(newConfig: RuntimeConfig): Promise<void> {
   // Remove trailing slashes
   const cleanedConfig: RuntimeConfig = {
     apiBaseUrl: newConfig.apiBaseUrl.replace(/\/+$/, ''),
-    cameraUrl: newConfig.cameraUrl.replace(/\/+$/, '')
+    cameraUrl: newConfig.cameraUrl.replace(/\/+$/, ''),
+    mills: newConfig.mills,
+    inchancable: newConfig.inchancable,
   };
 
   // Save to localStorage as runtime override
@@ -146,7 +188,9 @@ function getRuntimeConfigOverride(): RuntimeConfig | null {
       if (parsed.apiBaseUrl && parsed.cameraUrl) {
         return {
           apiBaseUrl: parsed.apiBaseUrl.replace(/\/+$/, ''),
-          cameraUrl: parsed.cameraUrl.replace(/\/+$/, '')
+          cameraUrl: parsed.cameraUrl.replace(/\/+$/, ''),
+          mills: parsed.mills,
+          inchancable: parsed.inchancable,
         };
       }
     }

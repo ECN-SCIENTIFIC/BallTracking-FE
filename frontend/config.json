@@ -1,5 +1,6 @@
 {
   "apiBaseUrl": "http://127.0.0.1:8000",
-  "cameraUrl": "http://127.0.0.1:8000"
+  "cameraUrl": "http://127.0.0.1:8000",
+  "mills": ["M1", "M2"],
+  "inchancable": true
 }
-
