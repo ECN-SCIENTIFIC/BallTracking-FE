@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { loadConfig } from '$lib/runtimeConfig';
+  import { getLatestResult } from '$lib/api';
+  import { normalizeProcessImageResponse } from '$lib/ballTracking/normalize';
   let loading = true;
   let error: string | null = null;
   let imageData: string | null = null;
@@ -9,17 +10,13 @@
     loading = true;
     error = null;
     try {
-      const config = await loadConfig();
-      const res = await fetch(`${config.apiBaseUrl}/process_image`);
-      if (res.status === 204) {
-        error = 'No image data available yet. Please try again in a few seconds.';
-        return;
+      const data = normalizeProcessImageResponse(await getLatestResult());
+      if (!data) {
+        throw new Error('Invalid response');
       }
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
       
       if (data.results?.img_result) {
-        imageData = `data:image/jpeg;base64,${data.results.img_result}`;
+        imageData = `data:${data.results.img_result_mime ?? "image/jpeg"};base64,${data.results.img_result}`;
       } else {
         throw new Error('No image data found in response');
       }
@@ -36,7 +33,7 @@
 <div class="min-h-screen bg-[#181e2a] text-white flex flex-col items-center py-10 px-4">
   <div class="w-full max-w-4xl">
     <h1 class="text-3xl font-bold mb-2">Processed Image Result</h1>
-    <h2 class="text-lg text-gray-400 mb-8">Displaying processed image from API</h2>
+    <h2 class="text-lg text-gray-400 mb-8">Displaying latest image from API</h2>
 
     {#if loading}
       <div class="flex justify-center items-center h-40">

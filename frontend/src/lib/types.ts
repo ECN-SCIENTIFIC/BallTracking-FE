@@ -48,6 +48,12 @@ export interface ProcessImageResponse {
         shift_end_time?: number | string;
         turno_inicio?: number | string;
         turno_fin?: number | string;
+        acumulado_bolas_evento?: number;
+        flujo_bolas_por_minuto?: number;
+        flujo_bolas_por_hora?: number;
+        tiempo_evento_s?: number;
+        carguio_status?: string;
+        evento_id?: number | null;
         ball_tracking?: {
             bucket_ms: number;
             pulses: Array<{ time: number; m1: number; m2: number }>;
@@ -90,3 +96,15 @@ export interface ServiceEndpoint {
     description: string;
     responseType: string;
 } 
+
+export interface CommandResponse {
+    ok?: boolean;
+    active?: boolean;
+    already_stopped?: boolean;
+    channel?: number;
+    duration_s?: number;
+    remaining_s?: number;
+    started_at_iso?: string | null;
+    message?: string;
+    reason?: string;
+}

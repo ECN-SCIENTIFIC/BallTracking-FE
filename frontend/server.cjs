@@ -8,11 +8,15 @@ const { spawn } = require('child_process');
 
 const isPackaged = typeof process.pkg !== 'undefined';
 const baseDir = isPackaged ? path.dirname(process.execPath) : __dirname;
+const appDir = __dirname;
 
 const candidateRoots = [
-  path.join(baseDir, 'build'),           // SvelteKit static build
-  path.join(baseDir, 'dist'),            // Vite default
-  path.join(baseDir, 'public')           // last resort
+  path.join(baseDir, 'build'),           // Optional external override beside the executable
+  path.join(appDir, 'build'),            // Embedded pkg assets / local SvelteKit static build
+  path.join(baseDir, 'dist'),            // Vite default or external override
+  path.join(appDir, 'dist'),             // Embedded fallback
+  path.join(baseDir, 'public'),          // Last-resort external files
+  path.join(appDir, 'public')            // Last-resort embedded files
 ];
 
 const serveRoot = candidateRoots.find((p) => fs.existsSync(p)) || baseDir;
@@ -71,7 +75,7 @@ const server = http.createServer((req, res) => {
     // 1. In the base directory (where server.cjs is located)
     // 2. In the serveRoot directory
     const configPaths = [
-      path.join(baseDir, 'config.json'),
+      path.join(baseDir, 'config.json'), // Editable runtime override beside the executable
       path.join(serveRoot, 'config.json')
     ];
     

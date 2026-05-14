@@ -1,12 +1,16 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { processImage } from '$lib/api';
+  import { normalizeProcessImageResponse } from '$lib/ballTracking/normalize';
   import { processedImageStore, setProcessedImageLoading, setProcessedImageError, updateProcessedImage } from '$lib/stores';
 
   async function fetchData() {
     setProcessedImageLoading(true);
     try {
-      const data = await processImage();
+      const data = normalizeProcessImageResponse(await processImage());
+      if (!data) {
+        throw new Error('Invalid response');
+      }
       updateProcessedImage(data);
     } catch (e: any) {
       setProcessedImageError(e.message || 'Unknown error');
@@ -20,7 +24,7 @@
 <div class="min-h-screen bg-[#181e2a] text-white flex flex-col items-center py-10 px-4">
   <div class="w-full max-w-2xl">
     <h1 class="text-3xl font-bold mb-2">Process Image Results</h1>
-    <h2 class="text-lg text-gray-400 mb-8">Fetched from /process_image</h2>
+    <h2 class="text-lg text-gray-400 mb-8">Fetched from /get-latest-result</h2>
 
     {#if $processedImageStore.loading}
       <div class="flex justify-center items-center h-40">

@@ -13,6 +13,8 @@
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"lint": "eslint .",
 		"start": "node server.cjs",
+		"package:webapp": "node scripts/package-webapp.cjs",
+		"package:webapp:all": "node scripts/package-webapp.cjs --all",
 		"pkg": "npm run build && pkg server.cjs --target node18-win-x64 --output f80-meter.exe",
 		"pkg:all": "npm run build && pkg server.cjs --targets node18-win-x64,node18-linux-x64,node18-macos-x64 --output f80-meter"
 	},

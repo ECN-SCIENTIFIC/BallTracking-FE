@@ -12,7 +12,6 @@
 
 <script lang="ts">
   import { onMount } from "svelte";
-  import { get } from "svelte/store";
   import Sidebar from "$lib/Sidebar.svelte";
   import DashboardHeader from "$lib/components/DashboardHeader.svelte";
   import DashboardGrid from "$lib/components/DashboardGrid.svelte";
@@ -34,6 +33,7 @@
     translations,
   } from "$lib/stores";
   import { loadConfig } from "$lib/runtimeConfig";
+  import { pulseCleaner } from "$lib/api";
   import {
     buildMillSelectorOptions,
     coerceMillSelection,
@@ -186,6 +186,9 @@
     (typeof ballResults.conteo_bolas_turno === "number"
       ? ballResults.conteo_bolas_turno
       : undefined) ??
+    (typeof ballResults.acumulado_bolas_evento === "number"
+      ? ballResults.acumulado_bolas_evento
+      : undefined) ??
     (typeof ballResults.shift_ball_count === "number" ? ballResults.shift_ball_count : undefined) ??
     (typeof ballResults.shift_total_count === "number"
       ? ballResults.shift_total_count
@@ -222,11 +225,13 @@
     ballResults.ball_flow_per_minute,
     ballResults.balls_per_minute,
     ballResults.flujo_bolas_minuto,
+    ballResults.flujo_bolas_por_minuto,
   );
   $: backendBallFlowPerHour = firstNumber(
     ballResults.ball_flow_per_hour,
     ballResults.balls_per_hour,
     ballResults.flujo_bolas_hora,
+    ballResults.flujo_bolas_por_hora,
   );
   $: elapsedTodayMinutes = Math.max(
     1,
@@ -311,6 +316,17 @@
     millSelectionStore.set(value as MillSelection);
   }
 
+  async function runCleaner() {
+    try {
+      await pulseCleaner();
+      setProcessedImageError(null);
+    } catch (e: unknown) {
+      const errorMessage =
+        e instanceof Error ? e.message : "Failed to trigger cleaner";
+      setProcessedImageError(errorMessage);
+    }
+  }
+
   $: {
     const coerced = coerceMillSelection($millSelectionStore, mills);
     if (coerced !== $millSelectionStore) {
@@ -331,19 +347,22 @@
         coerceMillSelection(sel, config.millsResolved),
       );
 
-      const res = await fetch(`${config.apiBaseUrl}/process_image`);
+      const res = await fetch(`${config.apiBaseUrl}/get-latest-result`);
       if (res.status === 204) {
+        return;
+      }
+      if (res.status === 503) {
         return;
       }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const raw = await res.json();
 
-      const { error } = applyProcessImageFromApi(raw, {
-        requireImage: get(ballTrackingShowCameraStore),
+      const result = applyProcessImageFromApi(raw, {
+        requireImage: false,
       });
 
-      if (error) {
-        setProcessedImageError(error);
+      if (result.error) {
+        setProcessedImageError(result.error);
       } else {
         setProcessedImageError(null);
       }
@@ -357,8 +376,8 @@
         }
       }
       responseTimestamp =
-        typeof (raw as { timestamp?: number }).timestamp === "number"
-          ? (raw as { timestamp: number }).timestamp
+        typeof normalized?.timestamp === "number"
+          ? normalized.timestamp
           : null;
     } catch (e: unknown) {
       const errorMessage =
@@ -465,6 +484,7 @@
           {dayBallAccum}
           {dayRangeDisplay}
           {ballFlowDisplay}
+          onRunCleaner={runCleaner}
         />
 
         {#if isLoading}
