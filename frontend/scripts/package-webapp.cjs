@@ -13,13 +13,13 @@ const npmBin = isWindows ? 'npm.cmd' : 'npm';
 const args = new Set(process.argv.slice(2));
 const packageAll = args.has('--all');
 const target = process.env.PKG_TARGET || 'node18-win-x64';
-const outputName = process.env.PKG_OUTPUT || 'f80-meter.exe';
+const outputName = process.env.PKG_OUTPUT || 'balltracking.exe';
 
 function run(command, commandArgs) {
   execFileSync(command, commandArgs, {
     cwd: root,
     stdio: 'inherit',
-    shell: false,
+    shell: isWindows,
   });
 }
 
@@ -41,7 +41,7 @@ assertFile(pkgBin, 'pkg executable was not found. Run npm install before packagi
 console.log('Packaging self-contained executable...');
 if (packageAll) {
   run(pkgBin, [
-    'server.cjs',
+    packageJsonPath,
     '--targets',
     'node18-win-x64,node18-linux-x64,node18-macos-x64',
     '--out-path',
@@ -49,7 +49,7 @@ if (packageAll) {
   ]);
 } else {
   run(pkgBin, [
-    'server.cjs',
+    packageJsonPath,
     '--target',
     target,
     '--output',

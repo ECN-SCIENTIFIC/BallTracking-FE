@@ -85,7 +85,7 @@
         <img
           src={`data:${processedImageMime};base64,${$processedImageStore.data.results.img_result}`}
           alt="Processed Camera Feed"
-          class="w-full h-full object-cover"
+          class="w-full h-full object-contain bg-black"
         />
 
         {#if $processedImageStore.loading}
