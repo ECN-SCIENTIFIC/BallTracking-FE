@@ -24,7 +24,7 @@
   }
 </script>
 
-<header class="mb-4 flex flex-col gap-3 flex-shrink-0 pr-14 sm:flex-row sm:items-start sm:gap-4">
+<header class="mb-4 flex flex-col gap-3 flex-shrink-0 sm:flex-row sm:items-start sm:gap-4">
   <div class="flex-1 min-w-0">
     <h1 class="text-4xl font-bold text-white">
       {pageTitle}

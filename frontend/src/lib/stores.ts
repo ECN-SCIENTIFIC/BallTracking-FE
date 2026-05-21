@@ -301,6 +301,8 @@ export interface Translations {
   language: string;
   english: string;
   spanish: string;
+  guest: string;
+  signOut: string;
   
   // Main page
   generalOverview: string;
@@ -464,6 +466,8 @@ export const translations: Record<Language, Translations> = {
     language: 'Language',
     english: 'English',
     spanish: 'Spanish',
+    guest: 'Guest',
+    signOut: 'Sign Out',
     generalOverview: 'General Overview',
     f80Meter: 'F80 Meter',
     granulometriaCamara: 'Granulometry Camera',
@@ -600,6 +604,8 @@ export const translations: Record<Language, Translations> = {
     language: 'Idioma',
     english: 'Inglés',
     spanish: 'Español',
+    guest: 'Invitado',
+    signOut: 'Cerrar sesión',
     generalOverview: 'Vista General',
     f80Meter: 'Medidor F80',
     granulometriaCamara: 'Granulometría Cámara',

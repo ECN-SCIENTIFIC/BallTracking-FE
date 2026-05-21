@@ -12,7 +12,6 @@
 
 <script lang="ts">
   import { onMount } from "svelte";
-  import Sidebar from "$lib/Sidebar.svelte";
   import DashboardHeader from "$lib/components/DashboardHeader.svelte";
   import DashboardGrid from "$lib/components/DashboardGrid.svelte";
   import CameraFeedPanel from "$lib/components/CameraFeedPanel.svelte";
@@ -39,6 +38,27 @@
     coerceMillSelection,
   } from "$lib/ballTracking/mills";
   import { applyProcessImageFromApi, normalizeProcessImageResponse } from "$lib/ballTracking/normalize";
+
+  type BackendDailyWindow = {
+    start: string;
+    end: string;
+  };
+
+  type BackendShift = {
+    name: string;
+    start: string;
+    end: string;
+    end_next_calendar_day?: boolean;
+  };
+
+  type BackendScheduleConfig = {
+    timezone?: string;
+    daily_window?: BackendDailyWindow;
+    shifts?: {
+      enabled?: boolean;
+      items?: BackendShift[];
+    };
+  };
 
   $: mills = $ballTrackingMillsStore;
   $: chartPrefs = $ballTrackingChartPrefsStore;
@@ -126,8 +146,6 @@
 
   let selectedFaja: Faja | null = fajas[0] ?? null;
 
-  let sidebarCollapsed = true;
-  let activeSidebarTab = 0;
   let isDesktop = false;
 
   let currentTime = new Date();
@@ -135,6 +153,7 @@
   let lastImageHash: string | null = null;
   let imageChangeCount = 0;
   let responseTimestamp: number | null = null;
+  let backendScheduleConfig: BackendScheduleConfig | null = null;
 
   let isLoading = true;
   let ballsCurrentFrame = 0;
@@ -209,6 +228,67 @@
     return start;
   }
 
+  function parseTimeToMinutes(value: string | undefined) {
+    if (!value) return null;
+    const match = value.match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) return null;
+
+    const hours = Number(match[1]);
+    const minutes = Number(match[2]);
+    if (hours > 23 || minutes > 59) return null;
+
+    return hours * 60 + minutes;
+  }
+
+  function getMinutesInConfiguredTimezone(now: Date) {
+    const timezone = backendScheduleConfig?.timezone;
+    if (!timezone) return now.getHours() * 60 + now.getMinutes();
+
+    try {
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: timezone,
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+      }).formatToParts(now);
+      const hour = Number(parts.find((part) => part.type === "hour")?.value);
+      const minute = Number(parts.find((part) => part.type === "minute")?.value);
+
+      if (Number.isFinite(hour) && Number.isFinite(minute)) {
+        return hour * 60 + minute;
+      }
+    } catch {
+      // Fall back to browser-local time if the backend timezone is unavailable.
+    }
+
+    return now.getHours() * 60 + now.getMinutes();
+  }
+
+  function getWindowDurationMinutes(start: number, end: number) {
+    return end > start ? end - start : end + 1440 - start;
+  }
+
+  function getElapsedWindowMinutes(now: Date, window?: BackendDailyWindow) {
+    const start = parseTimeToMinutes(window?.start);
+    const end = parseTimeToMinutes(window?.end);
+    if (start === null || end === null) {
+      return Math.max(1, (now.getTime() - getDayStart(now).getTime()) / 60000);
+    }
+
+    const current = getMinutesInConfiguredTimezone(now);
+    const duration = getWindowDurationMinutes(start, end);
+    let elapsed = current - start;
+    if (elapsed < 0) elapsed += 1440;
+
+    return Math.max(1, Math.min(duration, elapsed));
+  }
+
+  function formatConfiguredRange(window?: BackendDailyWindow) {
+    return parseTimeToMinutes(window?.start) !== null && parseTimeToMinutes(window?.end) !== null
+      ? `${window?.start} - ${window?.end}`
+      : null;
+  }
+
   $: dayBallAccum =
     firstNumber(
       ballResults.conteo_bolas_dia,
@@ -219,7 +299,9 @@
     ) ?? ballsTotalCount;
 
   $: todayStart = getDayStart(currentTime);
-  $: dayRangeDisplay = `${formatShiftTime(todayStart)} - ${formatShiftTime(currentTime)}`;
+  $: dayRangeDisplay =
+    formatConfiguredRange(backendScheduleConfig?.daily_window) ??
+    `${formatShiftTime(todayStart)} - ${formatShiftTime(currentTime)}`;
 
   $: backendBallFlowPerMinute = firstNumber(
     ballResults.ball_flow_per_minute,
@@ -235,7 +317,7 @@
   );
   $: elapsedTodayMinutes = Math.max(
     1,
-    (currentTime.getTime() - todayStart.getTime()) / 60000,
+    getElapsedWindowMinutes(currentTime, backendScheduleConfig?.daily_window),
   );
   $: derivedBallFlowPerMinute = dayBallAccum / elapsedTodayMinutes;
   $: ballFlowDisplay =
@@ -260,7 +342,30 @@
     });
   }
 
+  function shiftContainsMinute(shift: BackendShift, minute: number) {
+    const start = parseTimeToMinutes(shift.start);
+    const end = parseTimeToMinutes(shift.end);
+    if (start === null || end === null) return false;
+
+    const crossesMidnight = shift.end_next_calendar_day || end <= start;
+    return crossesMidnight
+      ? minute >= start || minute < end
+      : minute >= start && minute < end;
+  }
+
   function getCurrentShiftRange(now: Date) {
+    const configuredShifts = backendScheduleConfig?.shifts;
+    if (configuredShifts?.enabled && configuredShifts.items?.length) {
+      const currentMinute = getMinutesInConfiguredTimezone(now);
+      const activeShift = configuredShifts.items.find((shift) =>
+        shiftContainsMinute(shift, currentMinute),
+      );
+
+      if (activeShift) {
+        return `${activeShift.name}: ${activeShift.start} - ${activeShift.end}`;
+      }
+    }
+
     const start = new Date(now);
     const end = new Date(now);
 
@@ -324,6 +429,19 @@
       const errorMessage =
         e instanceof Error ? e.message : "Failed to trigger cleaner";
       setProcessedImageError(errorMessage);
+    }
+  }
+
+  async function fetchBackendScheduleConfig() {
+    try {
+      const config = await loadConfig();
+      const res = await fetch(`${config.apiBaseUrl}/get-config`);
+      if (!res.ok) return;
+
+      const raw = (await res.json()) as BackendScheduleConfig;
+      backendScheduleConfig = raw;
+    } catch (error) {
+      console.warn("Failed to load backend schedule config:", error);
     }
   }
 
@@ -399,6 +517,7 @@
     mql.addEventListener("change", onMqChange);
     window.addEventListener("resize", syncViewportLayout);
 
+    fetchBackendScheduleConfig();
     fetchProcessedImage();
     const imageInterval = setInterval(fetchProcessedImage, 2000);
     const timeInterval = setInterval(() => {
@@ -452,7 +571,7 @@
 </style>
 
 {#if selectedFaja}
-  <div class="flex h-screen min-h-0 min-w-0 bg-gray-900 text-white overflow-hidden">
+  <div class="flex flex-col h-full min-h-0 min-w-0 bg-gray-900 text-white overflow-hidden">
     <div class="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
       <div
         class="w-full max-w-full min-w-0 p-6 flex flex-col h-full min-h-0 overflow-y-auto overflow-x-hidden"
@@ -591,57 +710,5 @@
       </div>
     </div>
 
-    <button
-        class="fixed top-4 right-2 z-30 bg-slate-700/80 backdrop-blur-sm hover:bg-slate-600/80 text-white rounded-full p-2 focus:outline-none border border-white/10 mr-4"
-        on:click={() => (sidebarCollapsed = !sidebarCollapsed)}
-        aria-label="Toggle sidebar"
-        style="pointer-events: auto;"
-        type="button"
-      >
-        {#if sidebarCollapsed}
-          <svg
-            class="w-6 h-6"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="M15 19l-7-7 7-7"
-            />
-          </svg>
-        {:else}
-          <svg
-            class="w-6 h-6"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="M9 5l7 7-7 7"
-            />
-          </svg>
-        {/if}
-      </button>
-      <div
-        class="fixed right-0 top-0 h-full z-20 transition-all duration-300 ease-in-out"
-        style="width: {sidebarCollapsed
-          ? '0px'
-          : '320px'}; pointer-events: {sidebarCollapsed ? 'none' : 'auto'};"
-      >
-        {#if !sidebarCollapsed}
-          <Sidebar
-            fajas={[selectedFaja!]}
-            {activeSidebarTab}
-            setActiveSidebarTab={(i: number) => (activeSidebarTab = i)}
-            showBallTrackingLayoutControls={true}
-          />
-        {/if}
-      </div>
   </div>
 {/if}

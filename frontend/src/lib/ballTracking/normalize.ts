@@ -100,6 +100,10 @@ export function normalizeProcessImageResponse(data: unknown): ProcessImageRespon
       img_result_mime: typeof r.img_result_mime === "string" ? r.img_result_mime : image.mime,
       numero_bolas_img: typeof r.numero_bolas_img === "number" ? r.numero_bolas_img : undefined,
       conteo_bolas: typeof r.conteo_bolas === "number" ? r.conteo_bolas : undefined,
+      conteo_bolas_dia:
+        typeof r.conteo_bolas_dia === "number" ? r.conteo_bolas_dia : undefined,
+      conteo_bolas_day:
+        typeof r.conteo_bolas_day === "number" ? r.conteo_bolas_day : undefined,
       last_detection_timestamp:
         toTimestampMs(r.last_detection_timestamp) ?? timestamp ?? r.last_detection_timestamp,
       masa_total: typeof r.masa_total === "number" ? r.masa_total : undefined,
