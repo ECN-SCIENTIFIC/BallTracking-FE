@@ -210,17 +210,9 @@
     : "None";
 
   $: shiftBallAccum =
-    (typeof ballResults.conteo_bolas_turno === "number"
+    typeof ballResults.conteo_bolas_turno === "number"
       ? ballResults.conteo_bolas_turno
-      : undefined) ??
-    (typeof ballResults.acumulado_bolas_evento === "number"
-      ? ballResults.acumulado_bolas_evento
-      : undefined) ??
-    (typeof ballResults.shift_ball_count === "number" ? ballResults.shift_ball_count : undefined) ??
-    (typeof ballResults.shift_total_count === "number"
-      ? ballResults.shift_total_count
-      : undefined) ??
-    ballsTotalCount;
+      : 0;
 
   function firstNumber(...values: unknown[]) {
     return values.find((value): value is number => typeof value === "number");

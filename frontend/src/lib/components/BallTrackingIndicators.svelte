@@ -67,6 +67,7 @@
   let indicatorOrder: IndicatorId[] = [...DEFAULT_INDICATOR_ORDER];
   let hiddenIndicatorIds: IndicatorId[] = [];
   let draggedIndicatorId: IndicatorId | null = null;
+  let openTooltipId: IndicatorId | null = null;
   let hasMounted = false;
   let indicatorGridElement: HTMLDivElement | null = null;
   let indicatorGridWidth = 0;
@@ -314,6 +315,19 @@
     draggedIndicatorId = null;
   }
 
+  function toggleIndicatorTooltip(event: MouseEvent, id: IndicatorId) {
+    event.stopPropagation();
+    openTooltipId = openTooltipId === id ? null : id;
+  }
+
+  function handleTooltipKeydown(event: KeyboardEvent, id: IndicatorId) {
+    if (event.key !== "Enter" && event.key !== " ") return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    openTooltipId = openTooltipId === id ? null : id;
+  }
+
   function indicatorIcon(id: IndicatorId) {
     const icons: Partial<Record<IndicatorId, string>> = {
       currentFrame: "center_focus_strong",
@@ -441,14 +455,13 @@
           {@const isHidden = hiddenIndicatorIds.includes(indicator.id)}
           {@const accentClass = indicatorAccentClass(indicator.id)}
           <article
-            class={`indicator-tile group relative min-h-[132px] overflow-hidden rounded-none border-0 bg-[#0A1220] p-4 text-left shadow-[0_18px_45px_rgba(0,0,0,0.18)] transition-all duration-200 after:absolute after:inset-x-0 after:bottom-0 after:h-2 ${accentClass} ${
+            class={`indicator-tile group relative min-h-[132px] overflow-visible rounded-none border-0 bg-[#0A1220] p-4 text-left shadow-[0_18px_45px_rgba(0,0,0,0.18)] transition-all duration-200 after:absolute after:inset-x-0 after:bottom-0 after:h-2 ${accentClass} ${
               editMode ? "cursor-grab hover:-translate-y-0.5 hover:border-cyan-300/35 active:cursor-grabbing" : ""
             } ${isHidden ? "opacity-45 grayscale" : ""} ${
               draggedIndicatorId === indicator.id ? "scale-[0.98] opacity-60" : ""
             }`}
             data-inchancable-active={indicator.id === "inchancable" ? inchancableValue : undefined}
             aria-grabbed={draggedIndicatorId === indicator.id}
-            title={indicator.tooltip ?? undefined}
             on:dragover={handleDragOver}
             on:drop={(event) => handleDrop(event, indicator.id)}
           >
@@ -525,6 +538,35 @@
             <div
               class={`relative z-10 grid h-full grid-rows-[auto_1fr_auto] ${editMode ? "pt-8" : ""}`}
             >
+              {#if indicator.tooltip && !editMode}
+                <div class="absolute right-0 top-0 z-30">
+                  <div class="group/tooltip relative">
+                    <span
+                      class="flex h-7 w-7 items-center justify-center rounded-full border border-white/20 bg-white/10 text-sm font-semibold text-white/90 shadow-sm transition-colors duration-150 group-hover/tooltip:bg-white/20"
+                      role="button"
+                      tabindex="0"
+                      aria-label="More information"
+                      aria-expanded={openTooltipId === indicator.id}
+                      on:click={(event) => toggleIndicatorTooltip(event, indicator.id)}
+                      on:keydown={(event) => handleTooltipKeydown(event, indicator.id)}
+                    >
+                      i
+                    </span>
+                    <div
+                      class={`pointer-events-none absolute right-0 top-9 w-64 rounded-xl border border-white/15 bg-[#0B1526]/95 px-4 py-3 text-sm leading-relaxed text-slate-100 shadow-2xl shadow-black/35 backdrop-blur-md transition-all duration-150 ${
+                        openTooltipId === indicator.id
+                          ? "translate-y-1 opacity-100"
+                          : "opacity-0 group-hover/tooltip:translate-y-1 group-hover/tooltip:opacity-100"
+                      }`}
+                      role="tooltip"
+                    >
+                      <div class="absolute -top-1.5 right-3 h-3 w-3 rotate-45 border-l border-t border-white/15 bg-[#0B1526]/95"></div>
+                      {indicator.tooltip}
+                    </div>
+                  </div>
+                </div>
+              {/if}
+
               <div class="mb-5 flex items-center gap-3 text-[#A0A0A0]">
                 <span
                   class="material-symbols-outlined indicator-symbol text-[28px] leading-none text-[#F8FAFC]"
