@@ -6,6 +6,10 @@
     ballAccumByDay: string;
     ballFlow: string;
     ballFlowHint: string;
+    imageStorage: string;
+    imageStorageOn: string;
+    imageStorageOff: string;
+    imageStorageToggleHint: string;
   };
 
   export let t: IndicatorTranslations;
@@ -19,11 +23,16 @@
   export let inchancableStatusLabel: string;
   export let shiftBallAccum: number;
   export let shiftRangeDisplay: string;
+  export let shiftRangeTooltip: string | null = null;
   export let dayBallAccum: number;
   export let dayRangeDisplay: string;
   export let ballFlowDisplay: string;
+  export let storageCaptureActive = false;
+  export let storageCaptureLoading = false;
+  export let storageCaptureError: string | null = null;
   export let onRunCleaner: () => void = () => {};
   export let onGenerateReport: () => void = () => {};
+  export let onToggleStorageCapture: () => void = () => {};
 
   type IndicatorId =
     | "currentFrame"
@@ -38,6 +47,7 @@
     label: string;
     value: string | number;
     sublabel?: string;
+    tooltip?: string | null;
   };
 
   const STORAGE_KEY = "ball-tracking-indicator-prefs-v1";
@@ -88,6 +98,7 @@
       label: t.ballAccumByShift,
       value: shiftBallAccum,
       sublabel: shiftRangeDisplay,
+      tooltip: shiftRangeTooltip,
     },
     {
       id: "dayBallAccum",
@@ -117,7 +128,7 @@
   $: displayIndicators = displayIndicatorIds
     .map((id) => indicatorById.get(id))
     .filter(isIndicator);
-  $: activeTileCount = displayIndicators.length + 2;
+  $: activeTileCount = displayIndicators.length + 3;
   $: indicatorColumnCount = chooseIndicatorColumnCount(
     activeTileCount,
     indicatorGridWidth,
@@ -356,7 +367,7 @@
   }
 
   .indicator-action-row > .indicator-tile {
-    flex: 1 1 calc((100% - var(--indicator-gap)) / 2);
+    flex: 1 1 0;
   }
 
   .indicator-symbol {
@@ -437,6 +448,7 @@
             }`}
             data-inchancable-active={indicator.id === "inchancable" ? inchancableValue : undefined}
             aria-grabbed={draggedIndicatorId === indicator.id}
+            title={indicator.tooltip ?? undefined}
             on:dragover={handleDragOver}
             on:drop={(event) => handleDrop(event, indicator.id)}
           >
@@ -582,6 +594,57 @@
               </span>
             </div>
             <span class="mt-3 min-h-5 text-sm font-medium leading-tight text-slate-600"></span>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          class={`indicator-tile group relative min-h-[132px] overflow-hidden rounded-none border-0 p-4 text-left shadow-[0_18px_45px_rgba(0,0,0,0.18)] transition-all duration-200 focus:outline-none focus:ring-2 disabled:cursor-wait disabled:opacity-75 after:absolute after:inset-x-0 after:bottom-0 after:h-2 ${
+            storageCaptureActive
+              ? "bg-[#0A1220] text-[#F8FAFC] hover:-translate-y-0.5 hover:bg-[#0F1A2D] focus:ring-emerald-400/40 after:bg-emerald-400"
+              : "bg-[#F8FAFC] text-[#0F172A] hover:-translate-y-0.5 hover:bg-[#EEF4FF] focus:ring-slate-400/40 after:bg-slate-400"
+          }`}
+          disabled={storageCaptureLoading}
+          aria-pressed={storageCaptureActive}
+          on:click={onToggleStorageCapture}
+        >
+          <div class="relative z-10 grid h-full grid-rows-[auto_1fr_auto]">
+            <div class="mb-5 flex items-center justify-between gap-3">
+              <span
+                class="material-symbols-outlined indicator-symbol text-[28px] leading-none"
+                aria-hidden="true"
+              >
+                database
+              </span>
+              <span
+                class={`inline-flex h-6 w-11 items-center rounded-full p-1 transition-colors ${
+                  storageCaptureActive ? "bg-emerald-400/25" : "bg-slate-300"
+                }`}
+                aria-hidden="true"
+              >
+                <span
+                  class={`h-4 w-4 rounded-full transition-transform ${
+                    storageCaptureActive
+                      ? "translate-x-5 bg-emerald-300"
+                      : "translate-x-0 bg-slate-600"
+                  }`}
+                ></span>
+              </span>
+            </div>
+            <div class="flex items-start">
+              <span class="text-3xl font-bold leading-none tracking-tight">
+                {t.imageStorage}
+              </span>
+            </div>
+            <span
+              class={`mt-3 min-h-5 text-sm font-medium leading-tight ${
+                storageCaptureActive ? "text-emerald-200" : "text-slate-600"
+              }`}
+            >
+              {storageCaptureLoading
+                ? t.updating
+                : storageCaptureError ?? (storageCaptureActive ? t.imageStorageOn : t.imageStorageOff)}
+            </span>
           </div>
         </button>
       </div>

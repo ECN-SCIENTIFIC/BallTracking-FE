@@ -32,7 +32,12 @@
     translations,
   } from "$lib/stores";
   import { loadConfig } from "$lib/runtimeConfig";
-  import { pulseCleaner } from "$lib/api";
+  import {
+    getStorageCaptureStatus,
+    pulseCleaner,
+    startStorageCapture,
+    stopStorageCapture,
+  } from "$lib/api";
   import {
     buildMillSelectorOptions,
     coerceMillSelection,
@@ -161,6 +166,9 @@
   let lastDetectionTimestamp: number | null = null;
   let inchancableValue: boolean | null = null;
   let inchancableStatusLabel = "0";
+  let storageCaptureActive = false;
+  let storageCaptureLoading = false;
+  let storageCaptureError: string | null = null;
 
   const DESKTOP_MIN_WIDTH = 1024;
 
@@ -353,17 +361,22 @@
       : minute >= start && minute < end;
   }
 
-  function getCurrentShiftRange(now: Date) {
+  function getActiveConfiguredShift(now: Date) {
     const configuredShifts = backendScheduleConfig?.shifts;
-    if (configuredShifts?.enabled && configuredShifts.items?.length) {
-      const currentMinute = getMinutesInConfiguredTimezone(now);
-      const activeShift = configuredShifts.items.find((shift) =>
-        shiftContainsMinute(shift, currentMinute),
-      );
+    if (!configuredShifts?.enabled || !configuredShifts.items?.length) return null;
 
-      if (activeShift) {
-        return `${activeShift.name}: ${activeShift.start} - ${activeShift.end}`;
-      }
+    const currentMinute = getMinutesInConfiguredTimezone(now);
+    return (
+      configuredShifts.items.find((shift) =>
+        shiftContainsMinute(shift, currentMinute),
+      ) ?? null
+    );
+  }
+
+  function getCurrentShiftRange(now: Date) {
+    const activeShift = getActiveConfiguredShift(now);
+    if (activeShift) {
+      return `${activeShift.name}: ${activeShift.start} - ${activeShift.end}`;
     }
 
     const start = new Date(now);
@@ -399,6 +412,11 @@
     shiftStartDisplay && shiftEndDisplay
       ? `${shiftStartDisplay} - ${shiftEndDisplay}`
       : getCurrentShiftRange(currentTime);
+  $: activeConfiguredShift = getActiveConfiguredShift(currentTime);
+  $: shiftRangeTooltip =
+    activeConfiguredShift?.end_next_calendar_day === true
+      ? t.shiftEndsNextDayTooltip
+      : null;
 
   $: pageTitle = `${t.ballTracking}`;
   $: pageSubtitle = t.ballDetectionOverview;
@@ -429,6 +447,43 @@
       const errorMessage =
         e instanceof Error ? e.message : "Failed to trigger cleaner";
       setProcessedImageError(errorMessage);
+    }
+  }
+
+  async function refreshStorageCaptureStatus() {
+    try {
+      const status = await getStorageCaptureStatus();
+      if (typeof status.active === "boolean") {
+        storageCaptureActive = status.active;
+      }
+      storageCaptureError = null;
+    } catch (e: unknown) {
+      storageCaptureError =
+        e instanceof Error ? e.message : "Failed to load image storage status";
+    }
+  }
+
+  async function toggleStorageCapture() {
+    if (storageCaptureLoading) return;
+
+    storageCaptureLoading = true;
+    storageCaptureError = null;
+
+    try {
+      const response = storageCaptureActive
+        ? await stopStorageCapture()
+        : await startStorageCapture();
+
+      if (typeof response.active === "boolean") {
+        storageCaptureActive = response.active;
+      } else {
+        storageCaptureActive = !storageCaptureActive;
+      }
+    } catch (e: unknown) {
+      storageCaptureError =
+        e instanceof Error ? e.message : "Failed to update image storage";
+    } finally {
+      storageCaptureLoading = false;
     }
   }
 
@@ -518,6 +573,7 @@
     window.addEventListener("resize", syncViewportLayout);
 
     fetchBackendScheduleConfig();
+    refreshStorageCaptureStatus();
     fetchProcessedImage();
     const imageInterval = setInterval(fetchProcessedImage, 2000);
     const timeInterval = setInterval(() => {
@@ -600,10 +656,15 @@
           {inchancableStatusLabel}
           {shiftBallAccum}
           {shiftRangeDisplay}
+          {shiftRangeTooltip}
           {dayBallAccum}
           {dayRangeDisplay}
           {ballFlowDisplay}
+          {storageCaptureActive}
+          {storageCaptureLoading}
+          {storageCaptureError}
           onRunCleaner={runCleaner}
+          onToggleStorageCapture={toggleStorageCapture}
         />
 
         {#if isLoading}

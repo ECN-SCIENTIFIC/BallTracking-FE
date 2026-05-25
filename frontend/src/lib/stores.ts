@@ -385,10 +385,15 @@ export interface Translations {
   dragIndicatorsHint: string;
   noIndicatorsVisible: string;
   ballAccumByShift: string;
+  shiftEndsNextDayTooltip: string;
   runCleaner: string;
   runCleanerHint: string;
   generateReport: string;
   generateReportHint: string;
+  imageStorage: string;
+  imageStorageOn: string;
+  imageStorageOff: string;
+  imageStorageToggleHint: string;
   ballAccumByDay: string;
   ballFlow: string;
   ballFlowHint: string;
@@ -530,10 +535,15 @@ export const translations: Record<Language, Translations> = {
     dragIndicatorsHint: 'Drag cards to reorder. Use Show/Hide to choose which indicators appear on the dashboard.',
     noIndicatorsVisible: 'All indicators are hidden. Open edit mode to show one again.',
     ballAccumByShift: 'Ball accum by shift',
+    shiftEndsNextDayTooltip: 'This shift starts on one calendar day and ends on the next.',
     runCleaner: 'Run cleaner',
     runCleanerHint: 'Start a cleaning cycle',
     generateReport: 'Generate report',
     generateReportHint: 'Export the latest summary',
+    imageStorage: 'Image storage',
+    imageStorageOn: 'Saving images',
+    imageStorageOff: 'Storage off',
+    imageStorageToggleHint: 'Toggle image storage',
     ballAccumByDay: 'Ball accum by day',
     ballFlow: 'Ball flow',
     ballFlowHint: 'Rolling rate',
@@ -668,10 +678,15 @@ export const translations: Record<Language, Translations> = {
     dragIndicatorsHint: 'Arrastre las tarjetas para reordenarlas. Use Mostrar/Ocultar para elegir qué indicadores aparecen en el panel.',
     noIndicatorsVisible: 'Todos los indicadores están ocultos. Abra el modo de edición para mostrar uno nuevamente.',
     ballAccumByShift: 'Bolas acumuladas por turno',
+    shiftEndsNextDayTooltip: 'Este turno comienza un día y termina al día siguiente.',
     runCleaner: 'Ejecutar limpieza',
     runCleanerHint: 'Iniciar ciclo de limpieza',
     generateReport: 'Generar reporte',
     generateReportHint: 'Exportar resumen reciente',
+    imageStorage: 'Guardar imágenes',
+    imageStorageOn: 'Guardando imágenes',
+    imageStorageOff: 'Guardado apagado',
+    imageStorageToggleHint: 'Activar o desactivar guardado de imágenes',
     ballAccumByDay: 'Bolas acumuladas por día',
     ballFlow: 'Flujo de bolas',
     ballFlowHint: 'Tasa móvil',
